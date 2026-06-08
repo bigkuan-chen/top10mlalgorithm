@@ -5,6 +5,7 @@
 平台採用 **Next.js (前端)** 與 **FastAPI (後端)** 架構，讓學習者不僅能閱讀理論，還能直接在瀏覽器中調整超參數，即時觀測 Scikit-learn 模型在二維空間中擬合的**決策面 (Decision Boundary)** 與評估指標變動。
 
 ---
+Live Demo: https://top10mlalgorithm.vercel.app/
 
 ## 📂 專案目錄結構
 
