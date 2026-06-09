@@ -107,6 +107,8 @@ export default function AiAssistant() {
   const [apiKey, setApiKey] = useState("");
   const [tempKey, setTempKey] = useState("");
   const [hasServerKey, setHasServerKey] = useState(false);
+  const [serverModels, setServerModels] = useState<string[]>([]);
+  const [serverError, setServerError] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -127,6 +129,8 @@ export default function AiAssistant() {
         if (response.ok) {
           const data = await response.json();
           setHasServerKey(data.hasApiKey);
+          if (data.models) setServerModels(data.models);
+          if (data.error) setServerError(data.error);
         }
       } catch (e) {
         console.error("Failed to check server key configuration", e);
@@ -406,6 +410,29 @@ export default function AiAssistant() {
                       登入 Google 帳號即可免費建立 API Key，每日提供 1500 次免費額度，完全不需信用卡。
                     </p>
                   </div>
+
+                  {hasServerKey && (
+                    <div className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 space-y-1.5 text-[11px] leading-relaxed">
+                      <div className="text-zinc-400 font-semibold flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <span>Vercel 環境變數金鑰檢測：</span>
+                      </div>
+                      {serverError ? (
+                        <div className="text-rose-400 text-[10px] break-all font-mono p-2 rounded bg-rose-950/10 border border-rose-900/10">
+                          {serverError}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-emerald-400/90 text-[10px] font-semibold">連線成功！金鑰可用模型：</p>
+                          <div className="max-h-[60px] overflow-y-auto font-mono text-[9px] text-zinc-500 space-y-0.5 custom-scrollbar pl-2">
+                            {serverModels.map((m, i) => (
+                              <div key={i}>{m.replace("models/", "")}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">
