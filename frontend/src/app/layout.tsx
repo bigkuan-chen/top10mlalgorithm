@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import AiAssistant from "@/components/AiAssistant";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,6 +32,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950">
           {children}
         </main>
+        <AiAssistant />
       </body>
     </html>
   );

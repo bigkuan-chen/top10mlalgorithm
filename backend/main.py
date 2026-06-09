@@ -117,6 +117,106 @@ class MLPParams(BaseModel):
     learning_rate_init: float = Field(default=0.01, ge=0.0001, le=1.0)
     max_iter: int = Field(default=200, ge=10, le=2000)
 
+class ChatMessage(BaseModel):
+    role: str  # "user" or "model"
+    text: str
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = Field(default=[])
+    current_algorithm: Optional[str] = Field(default=None)
+    api_key: Optional[str] = Field(default=None)
+
+# Local Fallback QA Engine
+def get_local_fallback_response(query: str, current_algo: Optional[str]) -> str:
+    query_lower = query.lower()
+    
+    # Map query/context to section
+    target_section = None
+    section_mapping = {
+        "linear-regression": ["線性回歸", "linear regression"],
+        "logistic-regression": ["邏輯回歸", "logistic regression"],
+        "decision-tree": ["決策樹", "decision tree"],
+        "random-forest": ["隨機森林", "random forest"],
+        "support-vector-machine": ["支持向量機", "svm", "support vector"],
+        "k-nearest-neighbors": ["最近鄰", "knn", "k-nearest", "k nearest"],
+        "naive-bayes": ["朴素貝葉斯", "naive bayes", "貝氏", "貝葉斯"],
+        "k-means-clustering": ["k-means", "kmeans", "k 均值", "k均值", "聚類"],
+        "principal-component-analysis": ["pca", "主成分分析", "降維"],
+        "neural-networks": ["神經網絡", "neural network", "mlp", "多層感知機"]
+    }
+    
+    matched_algo = None
+    for algo_id, keywords in section_mapping.items():
+        if any(kw in query_lower for kw in keywords):
+            matched_algo = algo_id
+            break
+            
+    if not matched_algo and current_algo in section_mapping:
+        matched_algo = current_algo
+
+    # Find the section in curriculum_data
+    if matched_algo and "sections" in curriculum_data:
+        algo_title_part = section_mapping[matched_algo][0]
+        for sec in curriculum_data["sections"]:
+            if algo_title_part in sec.get("title", ""):
+                target_section = sec
+                break
+                
+    if target_section:
+        title = target_section.get("title", "")
+        paragraphs = target_section.get("paragraphs", [])
+        
+        # Search for specific topic keywords in query
+        topic_keywords = {
+            "優缺點": ["優點", "缺點", "局限", "好處", "壞處", "限制", "限制性", "敏感"],
+            "公式原理": ["公式", "數學", "原理", "假設", "定義", "方程式", "sigmoid", "幾何", "核函數", "特徵值"],
+            "訓練步驟": ["訓練", "擬合", "收斂", "優化", "極大似然", "最小化", "損失函數"],
+            "資料預處理": ["預處理", "標準化", "特徵選擇", "缺失值", "尺度"],
+            "評估指標": ["評估", "指標", "mse", "r2", "準確率", "召回率", "auc", "f1", "accuracy"],
+            "參數調整": ["參數", "調參", "正則化", "l1", "l2", "剪枝", "深度", "超參數", "層數", "學習率"],
+            "應用場景": ["應用", "案例", "場景", "房價", "信用", "醫療", "流失", "推薦", "情感", "垃圾"],
+            "實作與程式": ["程式", "實作", "程式碼", "code", "scikit-learn", "tensorflow", "pytorch", "套件"],
+            "常見錯誤": ["常見錯誤", "錯誤", "注意", "尺度差異", "共線性", "不平衡", "過擬合"]
+        }
+        
+        matched_paragraphs = []
+        matched_topic = None
+        for topic, kws in topic_keywords.items():
+            if any(kw in query_lower for kw in kws):
+                matched_topic = topic
+                for p in paragraphs:
+                    if any(kw in p for kw in kws):
+                        if p not in matched_paragraphs:
+                            matched_paragraphs.append(p)
+                if matched_paragraphs:
+                    break
+        
+        if matched_paragraphs:
+            response = f"### 📚 課程庫檢索：{title} - {matched_topic}\n\n"
+            response += "\n\n".join([f"- {p}" for p in matched_paragraphs])
+        else:
+            response = f"### 📚 課程庫檢索：{title} 概述\n\n"
+            response += "\n\n".join([f"- {p}" for p in paragraphs[:3]])
+            
+        response += "\n\n---\n*💡 提示：系統目前處於「本機教材檢索模式」。若要解鎖通用問答、寫程式等完整 AI 功能，點擊右上方設定齒輪 ⚙️ 貼上您的免費 Gemini API Key 即可。*"
+        return response
+        
+    return f"""### 🤖 歡迎使用機器學習 AI 助教（本機模式）
+
+我是一台本機運作的助教。我可以根據本課程的教材庫為您回答關於十大演算法的問題。
+
+**當前教材包含**：線性回歸、邏輯回歸、決策樹、隨機森林、支持向量機 (SVM)、K 最近鄰 (KNN)、朴素貝葉斯、K-Means 聚類、主成分分析 (PCA) 與神經網絡。
+
+您可以試著問我：
+- 「什麼是 SVM 的優缺點？」
+- 「KNN 的公式與原理是什麼？」
+- 「線性回歸的常見錯誤有哪些？」
+
+---
+*💡 提示：點擊右上方設定齒輪 ⚙️，輸入免費申請的 Gemini API Key，即可解鎖完整 Gemini AI 對答與寫程式功能！*
+"""
+
 # HELPER: Compute 2D Decision Boundary
 def get_decision_boundary_grid(model, X, grid_size=30):
     x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
@@ -480,6 +580,107 @@ def simulate_mlp(params: MLPParams):
             "Best Validation Loss": round(float(model.best_validation_score_) if hasattr(model, 'best_validation_score_') else 0.0, 4)
         }
     }
+
+@app.post("/api/chat")
+def chat_with_assistant(request: ChatRequest):
+    import urllib.request
+    
+    # 1. Determine API Key (request priority, then fallback to backend env var)
+    api_key = request.api_key or os.environ.get("GEMINI_API_KEY")
+    
+    # 2. Extract context paragraphs if current algorithm is set
+    context_paragraphs = ""
+    algo_name = ""
+    if request.current_algorithm:
+        section_mapping = {
+            "linear-regression": ("線性回歸", "Linear Regression"),
+            "logistic-regression": ("邏輯回歸", "Logistic Regression"),
+            "decision-tree": ("決策樹", "Decision Tree"),
+            "random-forest": ("隨機森林", "Random Forest"),
+            "support-vector-machine": ("支持向量機", "Support Vector Machine"),
+            "k-nearest-neighbors": ("K 最近鄰", "K-Nearest Neighbors"),
+            "naive-bayes": ("朴素貝葉斯", "Naive Bayes"),
+            "k-means-clustering": ("K 均值聚類", "K-Means Clustering"),
+            "principal-component-analysis": ("主成分分析", "Principal Component Analysis"),
+            "neural-networks": ("神經網絡", "Neural Networks")
+        }
+        if request.current_algorithm in section_mapping:
+            algo_name = section_mapping[request.current_algorithm][0]
+            if "sections" in curriculum_data:
+                for sec in curriculum_data["sections"]:
+                    if algo_name in sec.get("title", ""):
+                        context_paragraphs = "\n".join(sec.get("paragraphs", []))
+                        break
+
+    # 3. If API Key is present, call Gemini API
+    if api_key:
+        # Prepare system instruction
+        system_instruction = (
+            "你是一個專業、親切的機器學習助教，正在為學生解答「機器學習十大演算法互動學習平台」上的學術問題。\n"
+            "你的回答應該專業、條理清晰，儘量使用繁體中文（台灣習慣用語），並且給出具體的公式解釋、步驟或程式範例。\n"
+            "這個平台涵蓋的十大演算法是：線性回歸、邏輯回歸、決策樹、隨機森林、支持向量機、K最近鄰、朴素貝葉斯、K-Means聚類、主成分分析、神經網絡。\n"
+        )
+        if context_paragraphs:
+            system_instruction += (
+                f"\n目前學生正在瀏覽「{algo_name}」單元的教材。如果學生的提問與該演算法有關，請結合以下教材內容進行精準回答，"
+                f"保持概念名詞與公式的一致性：\n{context_paragraphs}\n"
+            )
+            
+        # Format history in Gemini format
+        contents = []
+        for msg in request.history:
+            role = "user" if msg.role == "user" else "model"
+            contents.append({
+                "role": role,
+                "parts": [{"text": msg.text}]
+            })
+        
+        # Append current user prompt
+        contents.append({
+            "role": "user",
+            "parts": [{"text": request.message}]
+        })
+        
+        # Call Gemini API
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": contents,
+            "systemInstruction": {
+                "parts": [{"text": system_instruction}]
+            }
+        }
+        
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=12) as response:
+                res_body = json.loads(response.read().decode("utf-8"))
+                ai_text = res_body["candidates"][0]["content"]["parts"][0]["text"]
+                return {"response": ai_text, "mode": "gemini"}
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            print(f"Gemini API HTTP Error {e.code}: {error_body}")
+            fallback_response = get_local_fallback_response(request.message, request.current_algorithm)
+            return {
+                "response": f"*(⚠️ 已自動降級為本機模式：Gemini API 錯誤 - {e.code})*\n\n" + fallback_response,
+                "mode": "fallback_error"
+            }
+        except Exception as e:
+            print(f"Gemini API Generic Error: {e}")
+            fallback_response = get_local_fallback_response(request.message, request.current_algorithm)
+            return {
+                "response": f"*(⚠️ 已自動降級為本機模式：Gemini 呼叫發生異常)*\n\n" + fallback_response,
+                "mode": "fallback_error"
+            }
+            
+    # 4. If no API key, use local fallback
+    fallback_response = get_local_fallback_response(request.message, request.current_algorithm)
+    return {"response": fallback_response, "mode": "local"}
 
 if __name__ == "__main__":
     import uvicorn
