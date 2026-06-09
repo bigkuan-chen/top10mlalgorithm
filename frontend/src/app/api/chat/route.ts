@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
       console.error(`Gemini API HTTP Error ${response.status}: ${errorText}`);
       const fallbackResponse = getLocalFallbackResponse(message, current_algorithm);
       return NextResponse.json({
-        response: `*(⚠️ 已自動降級為本機模式：Gemini API 錯誤 - ${response.status})*\n\n` + fallbackResponse,
+        response: `*(⚠️ 已自動降級為本機模式：Gemini API 錯誤 - ${response.status} ${errorText})*\n\n` + fallbackResponse,
         mode: "fallback_error"
       });
     }
